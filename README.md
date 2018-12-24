@@ -13,7 +13,7 @@ pip install segmentation_pipeline
 
 ## Usage guide
 
-### Training a model
+### Training a model !!!!!!
 
 Let's start from a simple example of classification. Suppose, your data are structured as follows: a .cvs file with images ids and their labels and a folder with all these images. For training a neural network to classify these images all you need are few lines of python code:
 
@@ -116,40 +116,51 @@ to stage settings.
 
 *Note: This option is not supported for DeeplabV3 architecture.*
 
-#### Custom datasets дописать
+#### Custom datasets
 
-Training data and masks are not necessarily stored in files, so sometimes you need to declare your own dataset class,
-for example, the following code was used in my experiments with [Airbus ship detection challenge](https://www.kaggle.com/c/airbus-ship-detection/overview)
-to decode segmentation masks from rle encoded strings stored in csv file 
+You can declare your own dataset class as in this example:
 
 ```python
-from segmentation_pipeline.impl.datasets import PredictionItem
+from musket_core.datasets import PredictionItem
 import os
-from segmentation_pipeline.impl import rle
 import imageio
 import pandas as pd
+import numpy as np
+import cv2
 
-class SegmentationRLE:
+class Classification:
 
-    def __init__(self,path,imgPath):
-        self.data=pd.read_csv(path);
-        self.values=self.data.values;
-        self.imgPath=imgPath;
-        self.ship_groups=self.data.groupby('ImageId');
-        self.masks=self.ship_groups['ImageId'];
-        self.ids=list(self.ship_groups.groups.keys())
-        pass
+    def __init__(self,imgPath):
+        self.species = ['Black-grass', 'Charlock', 'Cleavers', 'Common Chickweed', 'Common wheat',
+           'Fat Hen', 'Loose Silky-bent', 'Maize', 'Scentless Mayweed',
+           'Shepherds Purse', 'Small-flowered Cranesbill', 'Sugar beet']
+        self.data = []
+        self.targets = []
+        self.ids = []
+        for s_id, s in enumerate(self.species):
+            s_folder = os.path.join(imgPath,s)
+            for file in os.listdir(s_folder):
+                self.data.append(os.path.join(s_folder, file))
+                self.targets.append(s_id)
+                self.ids.append(file)
+        
     
     def __len__(self):
-        return len(self.masks)
+        return len(self.data)
 
 
     def __getitem__(self, item):
-        pixels=self.ship_groups.get_group(self.ids[item])["EncodedPixels"]
-        return PredictionItem(self.ids[item] + str(), imageio.imread(os.path.join(self.imgPath,self.ids[item])),
-                              rle.masks_as_image(pixels) > 0.5)
-
-
+        item_file = self.data[item]
+        target = self.targets[item]
+        t = np.zeros(len(self.species))
+        t[target] = 1.0
+        image = self.read_image(item_file, (224,224))
+        return PredictionItem(self.ids[item], image, t)
+    
+    def read_image(self, filepath, target_size=None):
+        img = cv2.imread(filepath, cv2.IMREAD_COLOR)
+        img = cv2.resize(img.copy(), target_size, interpolation = cv2.INTER_AREA)
+        return img
     
 ```   
 
@@ -293,7 +304,7 @@ for i, item in enumerate(dataset_test):
 
 #Let's store results in csv
 df = pd.DataFrame.from_dict({'file': images, 'species': predictions})
-df.to_csv('submission_ensemble.csv', index=False)
+df.to_csv('submission.csv', index=False)
 ``` 
 
 #### Ensembling predictions
@@ -345,7 +356,7 @@ Example:
 python analize.py --inputFolder ./experiments --output ./result.py
 ``` 
 
-## What is supported? from keras applications
+## What is supported?
 
 At this moment classification pipeline supports following pre-trained models:
 
